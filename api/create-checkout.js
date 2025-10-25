@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 
-const PRICE_IDS = {
+const PLAN_PRICE_IDS = {
   'Starter-Monthly': 'price_1SM904HIZGyCkyOwrRW2RCOt',
   'Growing-Monthly': 'price_1SM90VHIZGyCkyOweSV2AcXH',
   'Pro-Monthly': 'price_1SM90pHIZGyCkyOwlCQfSgZH',
@@ -9,6 +9,15 @@ const PRICE_IDS = {
   'Growing-3 Months': 'price_1SM95xHIZGyCkyOwws8wrGta',
   'Pro-3 Months': 'price_1SM96FHIZGyCkyOwCwznG8nY',
   'Marketer-Leader-3 Months': 'price_1SM96aHIZGyCkyOwaNYU3RqZ',
+};
+
+const ACTIVE_PRODUCTS_PRICE_IDS = {
+  0: 'price_1SM9ItHIZGyCkyOwpirO0U01',
+  100: 'price_1SM9JFHIZGyCkyOwxRnFjiE3',
+  200: 'price_1SM9JdHIZGyCkyOw4DY02dk8',
+  300: 'price_1SM9JrHIZGyCkyOwIe8Bg1Oy',
+  400: 'price_1SM9K9HIZGyCkyOwsXjQNX2s',
+  500: 'price_1SM9KNHIZGyCkyOwHKqjwDiu',
 };
 
 export default async function handler(req, res) {
@@ -35,29 +44,26 @@ export default async function handler(req, res) {
     }
 
     const priceKey = `${plan}-${period}`;
-    const priceId = PRICE_IDS[priceKey];
+    const planPriceId = PLAN_PRICE_IDS[priceKey];
 
-    if (!priceId) {
+    if (!planPriceId) {
       return res.status(400).json({ error: 'Invalid plan or period' });
     }
 
     const lineItems = [
       {
-        price: priceId,
+        price: planPriceId,
         quantity: 1,
       }
     ];
 
-    // Additional products as one-time fee
-    if (additionalProducts && additionalProducts > 0) {
+    // Add Active Products tier
+    const additionalPrice = additionalProducts || 0;
+    const activeProductsPriceId = ACTIVE_PRODUCTS_PRICE_IDS[additionalPrice];
+    
+    if (activeProductsPriceId) {
       lineItems.push({
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: 'Additional Products',
-          },
-          unit_amount: Math.round(additionalProducts * 100),
-        },
+        price: activeProductsPriceId,
         quantity: 1,
       });
     }
