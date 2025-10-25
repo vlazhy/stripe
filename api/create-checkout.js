@@ -58,7 +58,7 @@ export default async function handler(req, res) {
     ];
 
     // Add Active Products tier
-    const additionalPrice = additionalProducts || 0;
+    const additionalPrice = req.body.additionalProductsPrice || 0;
     const activeProductsPriceId = ACTIVE_PRODUCTS_PRICE_IDS[additionalPrice];
     
     if (activeProductsPriceId) {
