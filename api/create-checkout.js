@@ -23,9 +23,7 @@ const ADDONS = {
 };
 
 const ALLOWED_ORIGINS = [
-  'https://www.nyle.ai',
-  'https://nyle.ai',
-  'https://nyle-ai-c61ba2.webflow.io'
+  'https://nyle-ai-c61ba2.webflow.io',
 ];
 
 const rateLimit = new Map();
