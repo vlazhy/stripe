@@ -1,5 +1,4 @@
 import Stripe from 'stripe';
-import { buffer } from 'micro';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -14,7 +13,7 @@ export default async function handler(req, res) {
     return res.status(405).end();
   }
 
-  const buf = await buffer(req);
+  const buf = await req.body;
   const sig = req.headers['stripe-signature'];
 
   let event;
