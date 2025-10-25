@@ -21,16 +21,22 @@ const ACTIVE_PRODUCTS_PRICE_IDS = {
 };
 
 export default async function handler(req, res) {
+  console.log('=== NEW VERSION V2 ===');
+  console.log('Method:', req.method);
+  console.log('Body:', JSON.stringify(req.body));
+  
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') {
+    console.log('OPTIONS request');
     return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
+    console.log('Not POST, returning 405');
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -38,35 +44,35 @@ export default async function handler(req, res) {
 
   try {
     const { plan, period, additionalProductsPrice } = req.body;
+    console.log('Extracted:', { plan, period, additionalProductsPrice });
 
     if (!plan || !period) {
+      console.log('Missing plan or period');
       return res.status(400).json({ error: 'Plan and period required' });
     }
 
     const priceKey = `${plan}-${period}`;
+    console.log('Price key:', priceKey);
+    
     const planPriceId = PLAN_PRICE_IDS[priceKey];
+    console.log('Plan price ID:', planPriceId);
 
     if (!planPriceId) {
+      console.log('Invalid price key');
       return res.status(400).json({ error: 'Invalid plan or period' });
     }
 
-    const lineItems = [
-      {
-        price: planPriceId,
-        quantity: 1,
-      }
-    ];
+    const lineItems = [{ price: planPriceId, quantity: 1 }];
 
     const additionalPrice = additionalProductsPrice || 0;
     const activeProductsPriceId = ACTIVE_PRODUCTS_PRICE_IDS[additionalPrice];
     
     if (activeProductsPriceId) {
-      lineItems.push({
-        price: activeProductsPriceId,
-        quantity: 1,
-      });
+      lineItems.push({ price: activeProductsPriceId, quantity: 1 });
+      console.log('Added active products');
     }
 
+    console.log('Creating session...');
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
@@ -75,9 +81,11 @@ export default async function handler(req, res) {
       cancel_url: 'https://www.nyle.ai/pricing?canceled=true',
     });
 
+    console.log('Session created:', session.id);
     return res.status(200).json({ url: session.url });
+
   } catch (error) {
-    console.error('Stripe error:', error);
+    console.error('Error:', error.message);
     return res.status(500).json({ error: error.message });
   }
 }
