@@ -1,6 +1,8 @@
 import Stripe from 'stripe';
 
-const PLAN_PRICE_IDS = {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+const PLANS = {
   'Starter-Monthly': 'price_1SM904HIZGyCkyOwrRW2RCOt',
   'Growing-Monthly': 'price_1SM90VHIZGyCkyOweSV2AcXH',
   'Pro-Monthly': 'price_1SM90pHIZGyCkyOwlCQfSgZH',
@@ -11,7 +13,7 @@ const PLAN_PRICE_IDS = {
   'Marketer-Leader-3 Months': 'price_1SM96aHIZGyCkyOwaNYU3RqZ',
 };
 
-const ACTIVE_PRODUCTS_PRICE_IDS = {
+const ADDONS = {
   0: 'price_1SM9ItHIZGyCkyOwpirO0U01',
   100: 'price_1SM9JFHIZGyCkyOwxRnFjiE3',
   200: 'price_1SM9JdHIZGyCkyOw4DY02dk8',
@@ -20,72 +22,74 @@ const ACTIVE_PRODUCTS_PRICE_IDS = {
   500: 'price_1SM9KNHIZGyCkyOwHKqjwDiu',
 };
 
+const ALLOWED_ORIGINS = [
+  'https://www.nyle.ai',
+  'https://nyle.ai',
+  'https://nyle-ai-c61ba2.webflow.io'
+];
+
+const rateLimit = new Map();
+
 export default async function handler(req, res) {
-  console.log('=== NEW VERSION V2 ===');
-  console.log('Method:', req.method);
-  console.log('Body:', JSON.stringify(req.body));
-  
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // CORS
+  const origin = req.headers.origin;
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    console.log('OPTIONS request');
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  if (req.method !== 'POST') {
-    console.log('Not POST, returning 405');
-    return res.status(405).json({ error: 'Method not allowed' });
+  // Rate limit
+  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress;
+  const now = Date.now();
+  const requests = (rateLimit.get(ip) || []).filter(t => now - t < 60000);
+  if (requests.length >= 10) {
+    return res.status(429).json({ error: 'Too many requests' });
   }
-
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  requests.push(now);
+  rateLimit.set(ip, requests);
 
   try {
-    const { plan, period, additionalProductsPrice } = req.body;
-    console.log('Extracted:', { plan, period, additionalProductsPrice });
-
+    const { plan, period, additionalProductsPrice = 0 } = req.body;
+    
+    // Validate
     if (!plan || !period) {
-      console.log('Missing plan or period');
-      return res.status(400).json({ error: 'Plan and period required' });
+      return res.status(400).json({ error: 'Missing plan or period' });
     }
 
     const priceKey = `${plan}-${period}`;
-    console.log('Price key:', priceKey);
-    
-    const planPriceId = PLAN_PRICE_IDS[priceKey];
-    console.log('Plan price ID:', planPriceId);
-
-    if (!planPriceId) {
-      console.log('Invalid price key');
-      return res.status(400).json({ error: 'Invalid plan or period' });
+    const planPrice = PLANS[priceKey];
+    if (!planPrice) {
+      return res.status(400).json({ error: 'Invalid plan' });
     }
 
-    const lineItems = [{ price: planPriceId, quantity: 1 }];
-
-    const additionalPrice = additionalProductsPrice || 0;
-    const activeProductsPriceId = ACTIVE_PRODUCTS_PRICE_IDS[additionalPrice];
-    
-    if (activeProductsPriceId) {
-      lineItems.push({ price: activeProductsPriceId, quantity: 1 });
-      console.log('Added active products');
+    if (![0, 100, 200, 300, 400, 500].includes(additionalProductsPrice)) {
+      return res.status(400).json({ error: 'Invalid addon price' });
     }
 
-    console.log('Creating session...');
+    // Build line items
+    const lineItems = [{ price: planPrice, quantity: 1 }];
+    if (additionalProductsPrice > 0) {
+      lineItems.push({ price: ADDONS[additionalProductsPrice], quantity: 1 });
+    }
+
+    // Create session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'subscription',
       success_url: 'https://www.nyle.ai/pricing?success=true',
       cancel_url: 'https://www.nyle.ai/pricing?canceled=true',
+      metadata: { plan, period, additionalProductsPrice: String(additionalProductsPrice) },
     });
 
-    console.log('Session created:', session.id);
     return res.status(200).json({ url: session.url });
 
-  } catch (error) {
-    console.error('Error:', error.message);
-    return res.status(500).json({ error: error.message });
+  } catch (err) {
+    console.error('Checkout error:', err);
+    return res.status(500).json({ error: 'Payment error' });
   }
 }
