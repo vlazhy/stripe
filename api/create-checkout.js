@@ -37,28 +37,20 @@ export default async function handler(req, res) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
   try {
-    // Принимаем billingPeriod вместо period
-    const { plan, billingPeriod, additionalProductsPrice } = req.body;
+    const { plan, period, additionalProductsPrice } = req.body;
 
-    console.log('Received data:', { plan, billingPeriod, additionalProductsPrice });
-
-    if (!plan || !billingPeriod) {
-      return res.status(400).json({ error: 'Plan and billingPeriod required' });
+    if (!plan || !period) {
+      return res.status(400).json({ error: 'Plan and period required' });
     }
 
-    const priceKey = `${plan}-${billingPeriod}`;
-    console.log('Looking for priceKey:', priceKey);
-
+    const priceKey = `${plan}-${period}`;
     const planPriceId = PLAN_PRICE_IDS[priceKey];
 
     if (!planPriceId) {
-      console.error('Invalid priceKey:', priceKey);
-      return res.status(400).json({ 
-        error: 'Invalid plan or period',
-        received: { plan, billingPeriod, priceKey }
-      });
+      return res.status(400).json({ error: 'Invalid plan or period' });
     }
 
+    // Only main plan in checkout
     const lineItems = [
       {
         price: planPriceId,
@@ -68,24 +60,22 @@ export default async function handler(req, res) {
 
     const additionalPrice = additionalProductsPrice || 0;
     const activeProductsPriceId = ACTIVE_PRODUCTS_PRICE_IDS[additionalPrice];
-    
-    if (activeProductsPriceId) {
-      lineItems.push({
-        price: activeProductsPriceId,
-        quantity: 1,
-      });
-    }
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'subscription',
+      allow_promotion_codes: true,
+      billing_address_collection: 'auto',
+      customer_creation: 'always',
+      metadata: {
+        active_products_price_id: activeProductsPriceId || '',
+      },
       success_url: 'https://www.nyle.ai/pricing?success=true',
       cancel_url: 'https://www.nyle.ai/pricing?canceled=true',
     });
 
-    // Возвращаем checkoutUrl вместо url
-    return res.status(200).json({ checkoutUrl: session.url });
+    return res.status(200).json({ url: session.url });
   } catch (error) {
     console.error('Stripe error:', error);
     return res.status(500).json({ error: error.message });
