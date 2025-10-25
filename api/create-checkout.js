@@ -72,9 +72,9 @@ export default async function handler(req, res) {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'subscription',
-      subscription_data: {
-        description: `${plan} Plan - ${period} + Active Products`,
-      },
+      allow_promotion_codes: true,
+      billing_address_collection: 'auto',
+      customer_creation: 'always',
       success_url: 'https://www.nyle.ai/pricing?success=true',
       cancel_url: 'https://www.nyle.ai/pricing?canceled=true',
 });
