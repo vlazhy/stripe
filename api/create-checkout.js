@@ -59,17 +59,18 @@ export default async function handler(req, res) {
 
     const additionalPrice = additionalProductsPrice || 0;
     const activeProductsPriceId = ACTIVE_PRODUCTS_PRICE_IDS[additionalPrice];
+    
+    if (activeProductsPriceId) {
+      lineItems.push({
+        price: activeProductsPriceId,
+        quantity: 1,
+      });
+    }
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'subscription',
-      allow_promotion_codes: true,
-      billing_address_collection: 'auto',
-      customer_creation: 'always',
-      metadata: {
-        active_products_price_id: activeProductsPriceId || '',
-      },
       success_url: 'https://www.nyle.ai/pricing?success=true',
       cancel_url: 'https://www.nyle.ai/pricing?canceled=true',
     });
