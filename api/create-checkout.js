@@ -36,21 +36,20 @@ export default async function handler(req, res) {
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
   try {
-    console.log('Request body:', req.body);
-    console.log('Request method:', req.method);
-    
     const { plan, period, additionalProductsPrice } = req.body;
-    
-    console.log('Parsed values:', { plan, period, additionalProductsPrice });
 
     if (!plan || !period) {
       return res.status(400).json({ error: 'Plan and period required' });
     }
 
-    // Only main plan in checkout
+    const priceKey = `${plan}-${period}`;
+    const planPriceId = PLAN_PRICE_IDS[priceKey];
+
+    if (!planPriceId) {
+      return res.status(400).json({ error: 'Invalid plan or period' });
+    }
+
     const lineItems = [
       {
         price: planPriceId,
