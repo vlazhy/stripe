@@ -37,17 +37,26 @@ export default async function handler(req, res) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
   try {
-    const { plan, period, additionalProductsPrice } = req.body;
+    // Принимаем billingPeriod вместо period
+    const { plan, billingPeriod, additionalProductsPrice } = req.body;
 
-    if (!plan || !period) {
-      return res.status(400).json({ error: 'Plan and period required' });
+    console.log('Received data:', { plan, billingPeriod, additionalProductsPrice });
+
+    if (!plan || !billingPeriod) {
+      return res.status(400).json({ error: 'Plan and billingPeriod required' });
     }
 
-    const priceKey = `${plan}-${period}`;
+    const priceKey = `${plan}-${billingPeriod}`;
+    console.log('Looking for priceKey:', priceKey);
+
     const planPriceId = PLAN_PRICE_IDS[priceKey];
 
     if (!planPriceId) {
-      return res.status(400).json({ error: 'Invalid plan or period' });
+      console.error('Invalid priceKey:', priceKey);
+      return res.status(400).json({ 
+        error: 'Invalid plan or period',
+        received: { plan, billingPeriod, priceKey }
+      });
     }
 
     const lineItems = [
@@ -75,7 +84,8 @@ export default async function handler(req, res) {
       cancel_url: 'https://www.nyle.ai/pricing?canceled=true',
     });
 
-    return res.status(200).json({ url: session.url });
+    // Возвращаем checkoutUrl вместо url
+    return res.status(200).json({ checkoutUrl: session.url });
   } catch (error) {
     console.error('Stripe error:', error);
     return res.status(500).json({ error: error.message });
