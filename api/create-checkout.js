@@ -37,7 +37,7 @@ export default async function handler(req, res) {
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
   try {
-    const { plan, period, additionalProducts } = req.body;
+    const { plan, period, additionalProductsPrice } = req.body;
 
     if (!plan || !period) {
       return res.status(400).json({ error: 'Plan and period required' });
@@ -50,6 +50,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid plan or period' });
     }
 
+    // Only main plan in checkout
     const lineItems = [
       {
         price: planPriceId,
@@ -57,16 +58,8 @@ export default async function handler(req, res) {
       }
     ];
 
-    // Add Active Products tier
-    const additionalPrice = req.body.additionalProductsPrice || 0;
+    const additionalPrice = additionalProductsPrice || 0;
     const activeProductsPriceId = ACTIVE_PRODUCTS_PRICE_IDS[additionalPrice];
-    
-    if (activeProductsPriceId) {
-      lineItems.push({
-        price: activeProductsPriceId,
-        quantity: 1,
-      });
-    }
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -75,9 +68,12 @@ export default async function handler(req, res) {
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
       customer_creation: 'always',
+      metadata: {
+        active_products_price_id: activeProductsPriceId || '',
+      },
       success_url: 'https://www.nyle.ai/pricing?success=true',
       cancel_url: 'https://www.nyle.ai/pricing?canceled=true',
-});
+    });
 
     return res.status(200).json({ url: session.url });
   } catch (error) {
